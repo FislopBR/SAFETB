@@ -25,7 +25,9 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/safe/professor', [AuthorizationController::class, 'professorDashboard'])->name('safe.professor.index');
     Route::patch('/safe/professor/{authorization}/aprovar', [AuthorizationController::class, 'approve'])->name('safe.professor.approve');
+    Route::patch('/safe/professor/{authorization}/negar', [AuthorizationController::class, 'deny'])->name('safe.professor.deny');
 
     Route::get('/safe/portaria', [AuthorizationController::class, 'portariaDashboard'])->name('safe.portaria.index');
     Route::patch('/safe/portaria/{authorization}/confirmar', [AuthorizationController::class, 'confirm'])->name('safe.portaria.confirm');
+    Route::patch('/safe/portaria/{authorization}/negar', [AuthorizationController::class, 'deny'])->name('safe.portaria.deny');
 });

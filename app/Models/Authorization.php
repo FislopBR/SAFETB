@@ -18,14 +18,16 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
     'date',
     'created_by',
     'status',
+    'professor_validated_at',
+    'portaria_confirmed_at',
 ])]
 class Authorization extends Model
 {
     use HasFactory;
 
-    public const STATUS_PENDING = 'pendente';
-    public const STATUS_AUTHORIZED = 'autorizado';
+    public const STATUS_AGUARDO = 'aguardo';
     public const STATUS_CONFIRMED = 'confirmado';
+    public const STATUS_NEGADO = 'negado';
 
     protected $casts = [
         'date' => 'date',
@@ -36,9 +38,14 @@ class Authorization extends Model
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
-            self::STATUS_AUTHORIZED => 'Autorizado pelo professor',
-            self::STATUS_CONFIRMED => 'Confirmado pela portaria',
-            default => 'Pendente de validação',
+            self::STATUS_AGUARDO, 'pendente' => $this->action === 'sair'
+                ? ($this->professor_validated_at ? 'Aguardando confirmação da portaria' : 'Aguardando validação do professor')
+                : 'Aguardando validação do professor',
+            self::STATUS_CONFIRMED => $this->action === 'sair'
+                ? 'Confirmado por: Professor + Portaria'
+                : 'Confirmado por: Professor',
+            self::STATUS_NEGADO => 'Negado',
+            default => 'Desconhecido',
         };
     }
 

@@ -73,7 +73,7 @@ class AuthorizationController extends Controller
             'lesson' => $data['lesson'],
             'authorized_by' => $data['authorized_by'],
             'date' => $data['date'],
-            'status' => Authorization::STATUS_PENDING,
+            'status' => Authorization::STATUS_AGUARDO,
             'created_by' => Auth::id(),
         ]);
 
@@ -86,7 +86,7 @@ class AuthorizationController extends Controller
             return $redirect;
         }
 
-        $pending = Authorization::where('status', Authorization::STATUS_PENDING)->latest()->get();
+        $pending = Authorization::where('status', Authorization::STATUS_AGUARDO)->latest()->get();
         $history = Authorization::where('status', Authorization::STATUS_CONFIRMED)->latest()->get();
 
         return view('safe.professor.index', compact('pending', 'history'));
@@ -98,7 +98,7 @@ class AuthorizationController extends Controller
             return $redirect;
         }
 
-        if ($authorization->status !== Authorization::STATUS_PENDING) {
+        if ($authorization->status !== Authorization::STATUS_AGUARDO) {
             return redirect()->route('safe.professor.index')->with('warning', 'A autorização já foi processada.');
         }
 
@@ -113,7 +113,6 @@ class AuthorizationController extends Controller
         if ($authorization->action === 'entrar') {
             $authorization->update([
                 'status' => Authorization::STATUS_CONFIRMED,
-                'portaria_confirmed_at' => now(),
             ]);
 
             Mail::to('mailpit@localhost')->send(new PortariaNotification($authorization));
@@ -122,8 +121,9 @@ class AuthorizationController extends Controller
             return redirect()->route('safe.professor.index')->with('success', 'Entrada validada pelo professor e confirmada automaticamente. Notificações disparadas.');
         }
 
+        // Para saídas: professor valida, mantém em 'aguardo' até a portaria confirmar
         $authorization->update([
-            'status' => Authorization::STATUS_AUTHORIZED,
+            'status' => Authorization::STATUS_AGUARDO,
         ]);
 
         return redirect()->route('safe.professor.index')->with('success', 'Liberação validada em sala pelo professor. Aguardando confirmação da portaria.');
@@ -136,7 +136,8 @@ class AuthorizationController extends Controller
         }
 
         $pending = Authorization::where('action', 'sair')
-            ->where('status', Authorization::STATUS_AUTHORIZED)
+            ->where('status', Authorization::STATUS_AGUARDO)
+            ->whereNotNull('professor_validated_at')
             ->latest()
             ->get();
 
@@ -154,7 +155,7 @@ class AuthorizationController extends Controller
             return $redirect;
         }
 
-        if ($authorization->action !== 'sair' || $authorization->status !== Authorization::STATUS_AUTHORIZED) {
+        if ($authorization->action !== 'sair' || $authorization->status !== Authorization::STATUS_AGUARDO || ! $authorization->professor_validated_at) {
             return redirect()->route('safe.portaria.index')->with('warning', 'Somente saídas autorizadas pelo professor podem ser confirmadas pela portaria.');
         }
 
@@ -168,6 +169,25 @@ class AuthorizationController extends Controller
         Log::info("WhatsApp simulado: aluno {$authorization->student_name} recebeu confirmação de saída às {$authorization->scheduled_time}.");
 
         return redirect()->route('safe.portaria.index')->with('success', 'Saída confirmada e notificações disparadas.');
+    }
+
+    public function deny(Authorization $authorization)
+    {
+        // Apenas professor ou portaria podem negar solicitações
+        if (!in_array(Auth::user()->role, ['professor', 'portaria'])) {
+            return redirect()->route('dashboard')->with('warning', 'Acesso não autorizado para esta ação.');
+        }
+
+        // Não negar quando já confirmado
+        if ($authorization->status === Authorization::STATUS_CONFIRMED) {
+            return back()->with('warning', 'Não é possível negar uma autorização já confirmada.');
+        }
+
+        $authorization->update([
+            'status' => Authorization::STATUS_NEGADO,
+        ]);
+
+        return back()->with('success', 'Pré-autorização negada.');
     }
 
     protected function authorizeRole(string $role)
